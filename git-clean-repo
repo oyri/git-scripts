@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+repository=
+workDirectory=$(mktemp -d "${TMPDIR:-/tmp}/XXXXXXXXXXXX")
+
+__cleanRepository() {
+	cd $workDirectory
+	git init || return 1
+	git checkout -b master
+	git commit --allow-empty -m "initial"
+	git remote add origin $repository || return 3
+	git push --mirror || return 4
+}
+
+__usage() {
+        echo "Usage $(basename $0) --repository <repository> [--workDirectory <work directory>]"
+}
+
+while [[ $# -gt 1 ]]
+do
+        key="$1"
+
+        case $key in
+        --repository)
+                repository="$2"
+                shift
+                ;;
+        --workDirectory)
+                workDirectory="$2"
+                shift
+                ;;
+        *)
+            # ignore unknown argument
+            ;;
+        esac
+        shift # past argument or value
+done
+
+test -z $repository && { __usage; exit 1; }
+
+__cleanRepository || exit $?

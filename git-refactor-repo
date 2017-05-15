@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+sourceRepository=
+sourceBranch=
+sourceDirectory=
+targetRepository=
+targetBranch=
+workDirectory=$(mktemp -d "${TMPDIR:-/tmp}/XXXXXXXXXXXX")
+
+__forkRepo() {
+	git clone -b ${sourceBranch} --single-branch ${sourceRepository} ${workDirectory}
+	echo "Cloned to ${workDirectory}"
+	cd ${workDirectory}
+	git filter-branch --subdirectory-filter ${sourceDirectory} --tag-name-filter cat ${sourceBranch}
+	git remote set-url origin ${targetRepository}
+	git push origin -f --follow-tags ${sourceBranch}:${targetBranch}
+}
+
+__usage() {
+	echo "Usage $(basename $0) --sourceRepository <source repository> --sourceBranch <source branch> --sourceDirectory <source directory> --targetRepository <target repository> --targetBranch <target branch> [--workDirectory <work directory>]"
+}
+
+while [[ $# -gt 1 ]]
+do
+	key="$1"
+
+	case $key in
+	--sourceRepository)
+		sourceRepository="$2"
+		shift
+		;;
+	--sourceBranch)
+		sourceBranch="$2"
+		shift
+		;;
+	--sourceDirectory)
+		sourceDirectory="$2"
+		shift
+		;;
+	--targetRepository)
+		targetRepository="$2"
+		shift
+		;;
+	--targetBranch)
+		targetBranch="$2"
+		shift
+		;;
+	--workDirectory)
+		workDirectory="$2"
+		shift
+		;;
+	*)
+	    # ignore unknown argument
+	    ;;
+	esac
+	shift # past argument or value
+done
+
+test -z $sourceRepository && { __usage; exit 1; }
+test -z $sourceBranch && { __usage; exit 1; }
+test -z $sourceDirectory && { __usage; exit 1; }
+test -z $targetRepository && { __usage; exit 1; }
+test -z $targetBranch && { __usage; exit 1; }
+
+__forkRepo $sourceRepository $sourceBranch $sourceDirectory $targetRepository $targetBranch $workDirectory

@@ -6,60 +6,108 @@ sourceDirectory=
 targetRepository=
 targetBranch=
 workDirectory=$(mktemp -d "${TMPDIR:-/tmp}/XXXXXXXXXXXX")
+removeDirectory=
 
-__forkRepo() {
+forkRepo() {
+    __readArgs "${@}"
+    test -z $sourceRepository && { __usage; exit 1; }
+    test -z $sourceBranch && { __usage; exit 1; }
+    test -z $targetRepository && { __usage; exit 1; }
+    test -z $targetBranch && { __usage; exit 1; }
 	git clone -b ${sourceBranch} --single-branch ${sourceRepository} ${workDirectory}
 	echo "Cloned to ${workDirectory}"
 	cd ${workDirectory}
-	git filter-branch --subdirectory-filter ${sourceDirectory} --tag-name-filter cat ${sourceBranch}
+    modifyRepo ${sourceDirectory:+--sourceDirectory ${sourceDirectory}} --sourceBranch ${sourceBranch} ${removeDirectory:+--removeDirectory "${removeDirectory}"}
 	git remote set-url origin ${targetRepository}
 	git push origin -f --follow-tags ${sourceBranch}:${targetBranch}
 }
 
-__usage() {
-	echo "Usage $(basename $0) --sourceRepository <source repository> --sourceBranch <source branch> --sourceDirectory <source directory> --targetRepository <target repository> --targetBranch <target branch> [--workDirectory <work directory>]"
+modifyRepo() {
+    __readArgs "${@}"
+    test -z $sourceBranch && { __usage; exit 1; }
+	git filter-branch \
+		${sourceDirectory:+--subdirectory-filter ${sourceDirectory}} \
+		--prune-empty \
+		${removeDirectory:+--index-filter "git rm -r --cached --ignore-unmatch ${removeDirectory}"} \
+		--tag-name-filter cat \
+		${sourceBranch}
 }
 
-while [[ $# -gt 1 ]]
-do
-	key="$1"
+removeFiles() {
+    __readArgs "${@}"
+    test -z $sourceBranch && { >&2 echo "Missing required argument sourceBranch"; __usage; exit 1; }
+    test -z $removeDirectory && { >&2 echo "Missing required argument removeDirectory"; __usage; exit 1; }
+	git filter-branch \
+		--prune-empty \
+		${removeDirectory:+--index-filter "git rm -r --cached --ignore-unmatch ${removeDirectory}"} \
+		--tag-name-filter cat \
+		${sourceBranch}
+}
 
-	case $key in
-	--sourceRepository)
-		sourceRepository="$2"
-		shift
-		;;
-	--sourceBranch)
-		sourceBranch="$2"
-		shift
-		;;
-	--sourceDirectory)
-		sourceDirectory="$2"
-		shift
-		;;
-	--targetRepository)
-		targetRepository="$2"
-		shift
-		;;
-	--targetBranch)
-		targetBranch="$2"
-		shift
-		;;
-	--workDirectory)
-		workDirectory="$2"
-		shift
-		;;
-	*)
-	    # ignore unknown argument
-	    ;;
-	esac
-	shift # past argument or value
-done
+__usage() {
+	echo "Usage:
+    $(basename $0) [COMMAND] \\
+	--sourceRepository SOURCE_REPOSITORY \\
+	--sourceBranch SOURCE_BRANCH \\
+	[--sourceDirectory SOURCE_DIRECTORY] \\
+	--targetRepository TARGET_REPOSITORY \\
+	--targetBranch TARGET_BRANCH \\
+	[--workDirectory WORK_DIRECTORY] \\
+	[--removeDirectory REMOVE_DIRECTORY]"
+}
 
-test -z $sourceRepository && { __usage; exit 1; }
-test -z $sourceBranch && { __usage; exit 1; }
-test -z $sourceDirectory && { __usage; exit 1; }
-test -z $targetRepository && { __usage; exit 1; }
-test -z $targetBranch && { __usage; exit 1; }
+__readArgs() {
+    while [[ $# -gt 1 ]]
+    do
+	    key="$1"
+	    case $key in
+	    --sourceRepository)
+		    sourceRepository="$2"
+		    shift
+		    ;;
+    	--sourceBranch)
+	    	sourceBranch="$2"
+    		shift
+	    	;;
+	    --sourceDirectory)
+		    sourceDirectory="$2"
+		    shift
+		    ;;
+	    --targetRepository)
+    		targetRepository="$2"
+    		shift
+    		;;
+	    --targetBranch)
+    		targetBranch="$2"
+	    	shift
+    		;;
+	    --workDirectory)
+    		workDirectory="$2"
+	    	shift
+		    ;;
+        --removeDirectory)
+    		removeDirectory="${2}"
+	    	shift
+		    ;;
+    	*)
+	    	# fail on unknown argument
+    		>&2 echo "Unknown argument ${key}"
+    		exit 1
+	    	;;
+    	esac
+    	shift # past argument or value
+    done
+}
 
-__forkRepo $sourceRepository $sourceBranch $sourceDirectory $targetRepository $targetBranch $workDirectory
+case $1 in *)
+        function=$1
+        if [ "function" = "$(type -t ${function})" ]; then
+            shift
+            ${function} "${@}"
+        else
+            >&2 echo "Unknown command ${function}"
+            usage
+        fi
+        ;;
+esac
+

@@ -106,7 +106,7 @@ case $1 in *)
             ${function} "${@}"
         else
             >&2 echo "Unknown command ${function}"
-            usage
+            __usage
         fi
         ;;
 esac
